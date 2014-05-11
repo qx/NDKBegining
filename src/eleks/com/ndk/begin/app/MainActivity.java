@@ -23,14 +23,16 @@ public class MainActivity extends Activity {
 
 	private void callNdk() {
 		try {
-			writeByteArrayToFile("/mnt/sdcard/FFMPEG/my.txt",
+//			writeByteArrayToFile("/mnt/sdcard/my.txt",
+			writeByteArrayToFile("/storage/sdcard0/my.txt",
 					getByteArrayFromAssetsFile());
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		TextView tv = (TextView) findViewById(R.id.tvText);
 		try {
-			tv.setText(getStringFromFile("/mnt/sdcard/FFMPEG/my.txt"));
+//			tv.setText(getStringFromFile("/mnt/sdcard/my.txt"));
+			tv.setText(getStringFromFile("/storage/sdcard0/my.txt"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
