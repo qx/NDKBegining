@@ -1,6 +1,6 @@
 Android开发进阶：Android NDK介绍
 导读
-
+http://mobile.51cto.com/aprogram-425666_all.htm
 为了在Android OS系统上开发应用程序，Google提供了两种开发包：SDK和NDK。你可以从Google官方查阅到有许多关于SDK 的优秀的书籍、文章作为参考，但Google没有提供足够的NDK资料。在现有的书籍中，我认为Cinar O.写于2012年 的”Pro Android C++ with the NDK”值得一读。
 
 本文旨在帮助那些缺乏Android NDK经验但又想扩充这方面知识的人们。我所关注的是JNI（本地编程接口，简称JNI）。本文分上下两篇，在上篇中，会从JNI为接口开始讲起；下篇会进行回顾，并给出带两个文件读写功能的实例。
