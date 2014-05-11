@@ -1,0 +1,292 @@
+Android开发进阶：Android NDK介绍
+导读
+
+为了在Android OS系统上开发应用程序，Google提供了两种开发包：SDK和NDK。你可以从Google官方查阅到有许多关于SDK 的优秀的书籍、文章作为参考，但Google没有提供足够的NDK资料。在现有的书籍中，我认为Cinar O.写于2012年 的”Pro Android C++ with the NDK”值得一读。
+
+本文旨在帮助那些缺乏Android NDK经验但又想扩充这方面知识的人们。我所关注的是JNI（本地编程接口，简称JNI）。本文分上下两篇，在上篇中，会从JNI为接口开始讲起；下篇会进行回顾，并给出带两个文件读写功能的实例。
+
+什么是 Android NDK？
+
+Android NDK（Native Development Kit ）是一套工具集合，允许你用像C/C++语言那样实现应用程序的一部分。
+
+何时使用NDK？
+
+Google仅在极少数情况下建议使用NDK，有如下使用场景：
+
+必须提高性能（例如，对大量数据进行排序）。
+使用第三方库。举例说明：许多第三方库由C/C++语言编写，而Android应用程序需要使用现有的第三方库，如Ffmpeg、OpenCV这样的库。
+底层程序设计（例如，应用程序不依赖Dalvik Java虚拟机）。
+什么是JNI？
+
+JNI是一种在Java虚拟机控制下执行代码的标准机制。代码被编写成汇编程序或者C/C++程序，并组装为动态库。也就允许了非静态绑定用法。这提供了一个在Java平台上调用C/C++的一种途径，反之亦然。
+
+JNI的优势
+
+与其他类似接口（Netscape Java运行接口、Microsoft的原始本地接口、COM/Java接口）相比，JNI主要的竞争优势在于：它在设计之初就确保了二进制的兼容 性，JNI编写的应用程序兼容性以及在某些具体平台上的Java虚拟机兼容性（当谈及JNI，这里并不特别针对Dalvik；JNI由Oracle开发， 适用于所有Java虚拟机）。这就是为什么C/C++编译后的代码无论在任何平台上都能执行。不过，一些早期版本并不支持二进制兼容。
+
+二进制兼容性是一种程序兼容性类型，允许一个程序在不改变其可执行文件的条件下在不同的编译环境中工作。
+
+JNI组织结构
+
+图1 — JNI接口指针
+图1 — JNI接口指针
+这张JNI函数表的组成就像C++的虚函数表。虚拟机可以运行多张函数表，举例来说，一张调试函数表，另一张是调用函数表。JNI接口指针仅在当前线程中起作用。这意味着指针不能从一个线程进入另一个线程。然而，可以在不同的线程中调用本地方法。
+
+示例代码：
+
+jdouble Java_pkg_Cls_f__ILjava_lang_String_2 (JNIEnv *env, jobject obj, jint i, jstring s)
+     const *str = (*env)->GetStringUTFChars(env, s,
+     (*env)->ReleaseStringUTFChars(env, s, str);
+     return
+*env — 一个接口指针。
+obj — 在本地方法中声明的对象引用。
+i和s — 用于传递的参数。
+原始类型（Primitive Type）在虚拟机和本机代码进行拷贝，对象之间使用引用进行传递。VM（虚拟机）要追踪所有传递给本地代码的对象引用。GC无法释放所有传递给本地代码的对象引用。与此同时，本机代码应该通知VM不需要的对象引用。
+
+局部引用和全局引用
+
+JNI定义了三种引用类型：局部引用、全局引用和全局弱引用。局部引用在方法完成之前是有效的。所有通过JNI函数返回的Java对象都是本地引 用。程序员希望VM会清空所有的局部引用，然而局部引用仅在其创建的线程里可用。如果有必要，局部引用可以通过接口中的DeleteLocalRef JNI方法立即释放：
+
+jclass clazz;
+clazz = (*env)->FindClass(env, "java/lang/String"
+(*env)->DeleteLocalRef(env, clazz)
+全局引用在完全释放之前都是有效的。要创建一个全局引用，需要调用NewGlobalRef方法。如果全局引用并不是必须的，可以通过DeleteGlobalRef方法删除：
+
+jclass localClazz;
+jclass globalClazz;
+localClazz = (*env)->FindClass(env, "java/lang/String"
+globalClazz = (*env)->NewGlobalRef(env, localClazz);
+(*env)->DeleteLocalRef(env, localClazz);
+错误
+
+JNI不会检查NullPointerException、IllegalArgumentException这样的错误，原因是：
+
+导致性能下降。
+在绝大多数C的库函数中，很难避免错误发生。
+JNI允许用户使用Java异常处理。大部分JNI方法会返回错误代码但本身并不会报出异常。因此，很有必要在代码本身进行处理，将异常抛给Java。在JNI内部，首先会检查调用函数返回的错误代码，之后会调用ExpectOccurred()返回一个错误对象。
+
+jthrowable ExceptionOccurred(JNIEnv *env);
+例如：一些操作数组的JNI函数不会报错，因此可以调用ArrayIndexOutofBoundsException或ArrayStoreExpection方法报告异常。
+
+JNI原始类型
+
+JNI有自己的原始数据类型和数据引用类型。
+
+Java类型
+本地类型（）
+描述
+boolean（布尔型）	jboolean	无符号8个比特
+byte(字节型)	jbyte	有符号8个比特
+char(字符型)	jchar	无符号16个比特
+short(短整型)	jshort	有符号16个比特
+int(整型)	jint	有符号32个比特
+long(长整型)	jlong	有符号64个比特
+float(浮点型)	jfloat	32个比特
+double(双精度浮点型)	jdouble	64个比特
+void(空型)	void	N/A
+JNI引用类型
+
+图2 — JNI引用类型
+图2 — JNI引用类型
+改进的UTF-8编码
+
+JNI使用改进的UTF-8字符串来表示不同的字符类型。Java使用UTF-16编码。UTF-8编码主要使用于C语言，因为它的编码用\u000表示为0xc0，而不是通常的0×00。非空ASCII字符改进后的字符串编码中可以用一个字节表示。
+
+JNI函数：
+
+JNI接口不仅有自己的数据集（dataset）也有自己的函数。回顾这些数据集和函数需要花费我们很多时间。可以从官方文档中找到更多信息：
+
+http://docs.oracle.com/javase/6/docs/technotes/guides/jni/spec/functions.html
+
+JNI函数使用示例
+
+下面会通过一个简短的示例确保你对这些资料所讲的内容有了正确的理解：
+
+#include <jni.h>
+JavaVM *jvm;
+JNIEnv *env;
+JavaVMInitArgs vm_args;
+JavaVMOption* options =  JavaVMOption[1];
+options[0].optionString = "-Djava.class.path=/usr/lib/java"
+vm_args.version = JNI_VERSION_1_6;
+vm_args.nOptions = 1;
+vm_args.options = options;
+vm_args.ignoreUnrecognized = false
+JNI_CreateJavaVM(&jvm, &env, &vm_args);
+delete options;
+jclass cls = env->FindClass("Main"
+jmethodID mid = env->GetStaticMethodID(cls, "test""(I)V"
+env->CallStaticVoidMethod(cls, mid, 100);
+jvm->DestroyJavaVM();
+让我们来逐个分析字符串：
+
+JavaVM — 提供了一个接口，可以调用函数创建、删除Java虚拟机。
+JNIEnv — 确保了大多数的JNI函数。
+JavaVMlnitArgs —  Java虚拟机参数。
+JavaVMOption — Java虚拟机选项。
+JNI的_CreateJavaVM()方法初始化Java虚拟机并向JNI接口返回一个指针。
+
+JNI_DestroyJavaVM()方法可以载入创建好的Java虚拟机。
+
+线程
+
+内核负责管理所有在Linux上运行的线程；线程通过AttachCurrentThread和AttachCurrentThreadAsDaemon函数附加到Java虚拟机。如果线程没有被添加成功，则不能访问JNIEnv。 Android系统不能停止JNI创建的线程，即使GC（Garbage Collection）在运行释放内存时也不行。直到调用DetachCurrentThread方法，该线程才会从Java虚拟机脱离。
+
+第一步
+
+你的项目结构应该如图3所示：
+
+图3—工程结构
+图3—工程结构
+在图3中，所有本地代码都存储到一个jni的文件夹。在新建一个工程后，Libs文件夹会被分为四个子文件夹。这意味着一个子目录对应一种处理器架构，库的数量取决于处理器架构的数量。
+
+要创建一个本地项目和一个Android项目可以参照以下面的步骤：
+
+创建一个jni文件夹 — 包含本地代码的项目源代码根目录。
+创建一个Android.mk文件用来构建项目。
+创建一个Application.mk文件用来存储编译参数。虽然这不是必须的配置，但是推荐你这么做。这样会使得编译设置更加灵活。
+创建一个ndk-build文件以此来显示编译过程（同样这一步也不是必须的）。
+Android.mk
+
+就像前面提到的，Android.mk是编译本地项目的makefile。Android.mk把代码按照模块进行了划分，把静态库（static library）拷贝到项目的libs文件夹，生成共享库（shared library）和独立的可执行文件。
+
+最精简的配置示例：
+
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+LOCAL_MODULE    := NDKBegining
+LOCAL_SRC_FILES := ndkBegining.c
+include $(BUILD_SHARED_LIBRARY)
+让我们来仔细看看：
+
+LOCAL_PATH:-$(call my-dir)  — 调用函数宏my-dir返回当前文件所在路径。
+include $(CLEAR_VARS) — 清除所有LOCAL_PATH以外的变量。这是必须的步骤，考虑到所有编译控制文件都位于同一个GNU MAKE执行环境中，所有变量都是全局的。
+LOCAL_MODULE — 输出模块名称。在上述例子中，输出模块叫做NDKBegining。但是在生成以后，会在libs文件夹中创建libNDKbegining库。同 时，Android系统会为其添加一个前缀名lib，例如一个被命名为”foo”的共享库模块，将会生成”libfoo.so”文件。 但是在Java代 码中使用库时应该忽略前缀名（也就是说，名称应该和makefile一样）。
+LOCAL_SRC_FILE — 列出编译所需要的源文件。
+include $(BUILD_SHARED_LIBARY) — 输出模块的类型。
+你可以在Android.mk文件中设置自定义变量；但是必须遵守语法命名规则：LOCAL_、PRIVATE_、NDK_、APP_、my-dir。Google建议自定义示例前缀使用MY_，例如：
+
+MY_SOURCE := NDKBegining.c
+
+这样就调用了一个变量$(MY_SOURCE)。变量同样也可以被连接起来，例如：
+
+LOCAL_SRC_FILES += $(MY_SOURCE)
+
+Application.mk
+
+这个makefile中定义了好几种变量让编译更加灵活：
+
+APP_OPTM — 这个变量是可选的，用于指定程序是“release”还是“debug”。在构建应用程序模块时，该变量用来优化构建过程。你可以在调试中指定“release”，不过“debug”支持的配置选项更多。
+APP_BUILD_SCRI为Android.mk定义了另一条路径。
+APP_ABI — 最重要的变量之一。它指定了编译模块时使用的目标处理器架构。默认情况下，APP_ABI会设置为“armeabi”，对应于ARMv5TE架构。例如， 如果要支持 ARMv7，就需要设置为“armeabi-v7a”。对于IA-32-x86和MIPS-mips这样支持多体系架构的系统，应该把 APP_ABI设置为“armeabi armeabi-v7a x86 mips”。在NDK修订版本7或更高的版本中，可以简单的设置APP_ABI := “all rather enumerating all the architectures”。
+APP_PLATFORM — 为目标平台名称；
+APP_STL — Android提供了一个最精简的libstdc c++运行库，因此开发人员使用的c++功能是非常有限的。然而使用APP_STL变量就可以使这些库支持扩展功能。
+NDK_TOOLCHAIN_VERSION-GCC — 选择的GCC编译器版本（默认情况下设置为4.6）。
+NDK-BUILDS
+
+NDK-build是一个GNU Make的包装容器。在NDK 4以后，ndk-build支持以下参数：
+
+clean — 清除所有已生成的二进制文件。
+NDK_DEBUG=1 — 生成可调式的代码。
+NDK_LOG=1 — 显示日志信息（用于调试）。
+NDK_HOST_32BIT=1 — 使Android系统支持64位版本（例如，NDK_PATH\toolchains\mipsel-linux-android-4.8\prebuilt\windows-x86_64，等等）。
+NDK_APPLICATION_MK=<file> — 指定Application.mk路径。
+在 NDK v5中，引入了NDK_DEBUG。当NDK_DEBUG设置为“1”时，便会生成可调试版本。如果没有设置NDK_DEBUG，ndk-build会默 认验证是否有在AndroidMainfest.xml文件中设置 android:debuggable=“true” 属性。如果你使用的是NDK v8以后的版本，Google不建议你在AndoirdMainfest.xml文件中使用 android:debuggable 属性（当你使用“ant debug”或ADT插件生成调试版本时，会自动添加“NDK_DEBUG=1”）。
+
+默认情况下，设置了支持64位版本。你也可以通过设置“NDK_HOST_32BIT=1”强制使用一个32位的工具链来使用32位应用程序。不过，谷歌仍建议使用64位的应用程序来提升大型程序的性能。
+
+如何建立一个项目？
+
+这 是个令人头疼的步骤。你要安装CDT插件并下载cygwin或mingw编译器和Android NDK，在Eclipse设置里配置这些东西，但最后还 是不能运行。我第一次开始使用Android NDK时，配置这些东西花了我3天时间。最后发现问题出在Cygwin编译器身上：应该为项目文件夹设置读、写、可执行的所有权限。
+
+现在可就简单多咯！只需要照着这个链接到网址：http://developer.android.com/sdk/index.html 下载ADT包，这里面有开始编译环节需要用到的所有东西。
+
+从Java代码中调用本地方法
+
+要从Java中调用本地代码，首先你要在Java类中定义本地方法。例如：
+
+native String nativeGetStringFromFile(String path) throws IOException;
+native  nativeWriteByteArrayToFile(String path, byte[] b) throws IOException
+你得在方法前使用“native”关键字。，这样编译器就知道这是JNI的入口点。这些方法会在C/C++文件中实现。Google建议用 “native+x”这样的命名方式，“x”代表着方法的实际名称。还有，在实现这些方法前你还得手动生成一个头文件。你可以手动执行此操作或者使用 JDK的 javah工具生成头文件。然后让我们将进一步探讨如何不用控制台，直接使用标准的Eclipse开发环境：
+
+打开Eclipse，选择Run -> External-tool-External -> External tools configurations。
+新建配置。
+指定javah.exe在jdk里的绝对路径（例如，C:\Program Files (x86)\Java\jdk1.6.0_35\bin\javah.exe）。
+在工作目录中指定bin/class目录的路径（例如，«${workspace_loc:/NDKBegin/bin/classes}»）。
+填入如下参数：“-jni ${java_type_name}” （注意，输入时不需要带引号）。
+现在你可以运行了。你的头文件应该放在bin/classes目录下。下一步，复制这些文件到本地工程的jni目录。打开工程的配置菜单并选择 Andorid Tools这一项 — 添加本地库（Add Native Library）。这样我们就可以使用jni.h头文件中包含的函数了。在此之后，你还要创建一个.cpp的文件（有时候 Eclipse会默认生成），并且方法实现已经在头文件中定义。
+
+考虑到文章长度和可读性，我并没有加入简单的代码示例，所以你在这里找不到。如果需要，请访问这个链接https://github.com/viacheslavtitov/NDKBegining。
+
+【编辑推荐】
+
+【责任编辑：Pockey TEL：（010）68476606】
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
